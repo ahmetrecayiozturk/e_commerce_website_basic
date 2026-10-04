@@ -22,6 +22,9 @@ admin: {
       resolve: "./src/modules/reviews",
     },
     {
+      resolve: "./src/modules/store-settings",
+    },
+    {
       resolve: "./src/modules/return-requests",
     },
     {
