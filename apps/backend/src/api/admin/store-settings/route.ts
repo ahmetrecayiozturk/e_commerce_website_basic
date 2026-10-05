@@ -26,6 +26,15 @@ const normalizeOptionList = (items: any[] = []) =>
     name: getVisibleName(item),
   }))
 
+const safeList = async (label: string, list: () => Promise<any[]>) => {
+  try {
+    return await list()
+  } catch (error) {
+    console.error(`Unable to load ${label} options`, error)
+    return []
+  }
+}
+
 export async function GET(req: MedusaRequest, res: MedusaResponse) {
   const service: StoreSettingsModuleService = req.scope.resolve(STORE_SETTINGS_MODULE)
   const tenantId = resolveTenantId(req)
@@ -39,12 +48,24 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
 
   const [regions, salesChannels, shippingProfiles, shippingOptions, stockLocations, paymentProviders] =
     await Promise.all([
-      regionService.listRegions({}, { select: ["id", "name", "currency_code"] }),
-      salesChannelService.listSalesChannels({}, { select: ["id", "name"] }),
-      fulfillmentService.listShippingProfiles({}, { select: ["id", "name"] }),
-      fulfillmentService.listShippingOptions({}, { select: ["id", "name", "shipping_profile_id"] }),
-      stockLocationService.listStockLocations({}, { select: ["id", "name"] }),
-      paymentService.listPaymentProviders({}, { select: ["id", "is_enabled"] }),
+      safeList("regions", () =>
+        regionService.listRegions({}, { select: ["id", "name", "currency_code"] })
+      ),
+      safeList("sales channels", () =>
+        salesChannelService.listSalesChannels({}, { select: ["id", "name"] })
+      ),
+      safeList("shipping profiles", () =>
+        fulfillmentService.listShippingProfiles({}, { select: ["id", "name"] })
+      ),
+      safeList("shipping options", () =>
+        fulfillmentService.listShippingOptions({}, { select: ["id", "name", "shipping_profile_id"] })
+      ),
+      safeList("stock locations", () =>
+        stockLocationService.listStockLocations({}, { select: ["id", "name"] })
+      ),
+      safeList("payment providers", () =>
+        paymentService.listPaymentProviders({}, { select: ["id", "is_enabled"] })
+      ),
     ])
 
   res.json({

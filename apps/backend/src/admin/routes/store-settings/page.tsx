@@ -82,6 +82,7 @@ const StoreSettingsPage = () => {
   const [settings, setSettings] = useState<StoreSettings>(emptySettings)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [loadError, setLoadError] = useState("")
   const [options, setOptions] = useState({
     regions: [] as OptionList,
     sales_channels: [] as OptionList,
@@ -93,17 +94,29 @@ const StoreSettingsPage = () => {
 
   const loadSettings = async () => {
     setLoading(true)
-    const response = await fetch("/admin/store-settings", {
-      credentials: "include",
-    })
-    const data = await response.json()
-    setSettings({
-      ...emptySettings,
-      ...data.store_settings,
-      social_links: data.store_settings?.social_links ?? {},
-    })
-    setOptions(data.available_options ?? options)
-    setLoading(false)
+    setLoadError("")
+
+    try {
+      const response = await fetch("/admin/store-settings", {
+        credentials: "include",
+      })
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || "Mağaza ayarları yüklenemedi.")
+      }
+
+      setSettings({
+        ...emptySettings,
+        ...data.store_settings,
+        social_links: data.store_settings?.social_links ?? {},
+      })
+      setOptions(data.available_options ?? options)
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Mağaza ayarları yüklenemedi.")
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -159,6 +172,11 @@ const StoreSettingsPage = () => {
 
   return (
     <Container className="p-6 space-y-6">
+      {loadError && (
+        <div className="rounded-lg border border-ui-border-error bg-ui-bg-error p-4">
+          <Text>{loadError}</Text>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <Heading level="h1">Mağaza Ayarları</Heading>
         <Button onClick={saveSettings} disabled={saving}>
@@ -274,11 +292,17 @@ const StoreSettingsPage = () => {
               <Select.Value placeholder="Bölge seçin" />
             </Select.Trigger>
             <Select.Content>
-              {optionMap.regions.map((option) => (
-                <Select.Item key={option.id} value={option.id}>
-                  {option.name}
+              {optionMap.regions.length ? (
+                optionMap.regions.map((option) => (
+                  <Select.Item key={option.id} value={option.id}>
+                    {option.name}
+                  </Select.Item>
+                ))
+              ) : (
+                <Select.Item value="__no_regions__" disabled>
+                  Bölge kaydı bulunamadı. Önce bir bölge oluşturun.
                 </Select.Item>
-              ))}
+              )}
             </Select.Content>
           </Select>
 
