@@ -35,6 +35,9 @@ type ProductVariantInput = {
 type StoreProductInput = {
   tenant_id?: string
   title?: string
+  category?: string
+  price?: number
+  stock_quantity?: number
   subtitle?: string
   description?: string
   handle?: string
@@ -72,25 +75,29 @@ const normalizeStoreProduct = createStep(
       (option) => option && option.title && option.title.trim()
     )
 
-    if (!options.length) {
-      throw new MedusaError(
-        MedusaError.Types.INVALID_DATA,
-        "En az bir ürün varyasyonu tanımlanmalıdır."
-      )
-    }
-
     const variants = (input.variants ?? []).filter(
       (variant) => variant && variant.options && Object.keys(variant.options).length > 0
     )
 
-    if (!variants.length) {
-      throw new MedusaError(
-        MedusaError.Types.INVALID_DATA,
-        "En az bir ürün varyantı eklenmelidir."
-      )
-    }
+    const simpleOptions = options.length
+      ? options
+      : [{ title: "Ürün", values: ["Standart"], is_exclusive: true }]
+    const simpleVariants = variants.length
+      ? variants
+      : [
+          {
+            title,
+            options: { Ürün: "Standart" },
+            prices: [
+              {
+                amount: Number(input.price ?? 0),
+                currency_code: "TRY",
+              },
+            ],
+          },
+        ]
 
-    const salesChannels = input.sales_channels ?? []
+    const salesChannels = [...(input.sales_channels ?? [])]
     const resolvedSalesChannelId =
       input.sales_channel_id ?? settings?.default_sales_channel_id ?? undefined
 
@@ -98,7 +105,7 @@ const normalizeStoreProduct = createStep(
       salesChannels.push({ id: resolvedSalesChannelId })
     }
 
-    const normalizedVariants = variants.map((variant) => ({
+    const normalizedVariants = simpleVariants.map((variant) => ({
       ...variant,
       title:
         variant.title?.trim() ||
@@ -108,16 +115,16 @@ const normalizeStoreProduct = createStep(
       allow_backorder: variant.allow_backorder ?? false,
       prices:
         variant.prices && variant.prices.length > 0
-          ? variant.prices
+          ? variant.prices.map((price) => ({ ...price, currency_code: "TRY" }))
           : [
               {
-                amount: 0,
-                currency_code: settings?.default_currency_code ?? "TRY",
+                amount: Number(input.price ?? 0),
+                currency_code: "TRY",
               },
             ],
     }))
 
-    const { tenant_id: _tenantId, additional_data: _additionalData, ...productData } = input
+    const { tenant_id: _tenantId, additional_data: _additionalData, category: _category, price: _price, stock_quantity: _stockQuantity, ...productData } = input
 
     const payload = {
       ...productData,
@@ -133,7 +140,7 @@ const normalizeStoreProduct = createStep(
       sales_channels: salesChannels.length ? salesChannels : undefined,
       shipping_profile_id:
         input.shipping_profile_id ?? settings?.default_shipping_profile_id ?? undefined,
-      options: options.map((option) => ({
+      options: simpleOptions.map((option) => ({
         title: option.title.trim(),
         values: option.values.filter(Boolean).map((value) => value.trim()),
         is_exclusive: option.is_exclusive ?? true,
@@ -151,6 +158,11 @@ const normalizeStoreProduct = createStep(
               typeof category === "string" ? { id: category } : { id: category.id }
             )
           : undefined,
+      metadata: {
+        ...(input.additional_data ?? {}),
+        category_name: input.category?.trim() || undefined,
+        stock_quantity: Number(input.stock_quantity ?? 0),
+      },
     }
 
     return new StepResponse(payload)
