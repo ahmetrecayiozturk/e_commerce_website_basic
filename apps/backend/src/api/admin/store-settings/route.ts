@@ -26,6 +26,14 @@ const normalizeOptionList = (items: any[] = []) =>
     name: getVisibleName(item),
   }))
 
+const safeList = async (list: () => Promise<any[]>) => {
+  try {
+    return await list()
+  } catch {
+    return []
+  }
+}
+
 export async function GET(req: MedusaRequest, res: MedusaResponse) {
   const service: StoreSettingsModuleService = req.scope.resolve(STORE_SETTINGS_MODULE)
   const tenantId = resolveTenantId(req)
@@ -39,12 +47,14 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
 
   const [regions, salesChannels, shippingProfiles, shippingOptions, stockLocations, paymentProviders] =
     await Promise.all([
-      regionService.listRegions({}, { select: ["id", "name", "currency_code"] }),
-      salesChannelService.listSalesChannels({}, { select: ["id", "name"] }),
-      fulfillmentService.listShippingProfiles({}, { select: ["id", "name"] }),
-      fulfillmentService.listShippingOptions({}, { select: ["id", "name", "shipping_profile_id"] }),
-      stockLocationService.listStockLocations({}, { select: ["id", "name"] }),
-      paymentService.listPaymentProviders({}, { select: ["id", "is_enabled"] }),
+      safeList(() => regionService.listRegions({}, { select: ["id", "name", "currency_code"] })),
+      safeList(() => salesChannelService.listSalesChannels({}, { select: ["id", "name"] })),
+      safeList(() => fulfillmentService.listShippingProfiles({}, { select: ["id", "name"] })),
+      safeList(() =>
+        fulfillmentService.listShippingOptions({}, { select: ["id", "name", "shipping_profile_id"] })
+      ),
+      safeList(() => stockLocationService.listStockLocations({}, { select: ["id", "name"] })),
+      safeList(() => paymentService.listPaymentProviders({}, { select: ["id", "is_enabled"] })),
     ])
 
   res.json({
