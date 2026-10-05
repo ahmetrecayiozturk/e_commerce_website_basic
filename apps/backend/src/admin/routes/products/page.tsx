@@ -1,79 +1,45 @@
 import { defineRouteConfig } from "@medusajs/admin-sdk"
-import { Button, Container, Heading, Input, Select, Text, Textarea } from "@medusajs/ui"
+import { Button, Container, Heading, Input, Text, Textarea } from "@medusajs/ui"
 import { useEffect, useState } from "react"
 
 type ProductRecord = {
   id: string
   title: string
-  handle?: string
   description?: string
-  status?: "draft" | "proposed" | "published" | "rejected"
-  discountable?: boolean
-  created_at?: string
+  status?: string
+  metadata?: { category_name?: string; stock_quantity?: number }
+  variants?: Array<{ prices?: Array<{ amount?: number }>; inventory_quantity?: number }>
 }
 
-type DraftProduct = {
+type ProductDraft = {
   title: string
+  category: string
+  price: number
+  stock_quantity: number
   description: string
-  handle: string
-  status: "draft" | "proposed" | "published" | "rejected"
-  discountable: boolean
-  options: Array<{
-    title: string
-    values: string[]
-    is_exclusive: boolean
-  }>
-  variants: Array<{
-    title: string
-    sku: string
-    options: Record<string, string>
-    prices: Array<{ amount: number; currency_code: string }>
-    manage_inventory: boolean
-    allow_backorder: boolean
-  }>
 }
 
-const emptyProduct: DraftProduct = {
+const emptyProduct: ProductDraft = {
   title: "",
+  category: "",
+  price: 0,
+  stock_quantity: 0,
   description: "",
-  handle: "",
-  status: "draft",
-  discountable: true,
-  options: [
-    {
-      title: "Boyut",
-      values: ["S", "M", "L"],
-      is_exclusive: true,
-    },
-  ],
-  variants: [
-    {
-      title: "S",
-      sku: "",
-      options: { Boyut: "S" },
-      prices: [{ amount: 0, currency_code: "TRY" }],
-      manage_inventory: true,
-      allow_backorder: false,
-    },
-  ],
 }
 
 const ProductPage = () => {
   const [products, setProducts] = useState<ProductRecord[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [draft, setDraft] = useState<DraftProduct>(emptyProduct)
+  const [draft, setDraft] = useState<ProductDraft>(emptyProduct)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState("")
 
   const loadProducts = async () => {
     setLoading(true)
     const response = await fetch("/admin/products", { credentials: "include" })
     const data = await response.json()
-    const list = data.products ?? []
-    setProducts(list)
-    if (!selectedId && list[0]) {
-      setSelectedId(list[0].id)
-    }
+    setProducts(data.products ?? [])
     setLoading(false)
   }
 
@@ -82,257 +48,116 @@ const ProductPage = () => {
   }, [])
 
   useEffect(() => {
-    if (!selectedId) return
-
     const product = products.find((item) => item.id === selectedId)
     if (!product) return
-
     setDraft({
       title: product.title ?? "",
+      category: product.metadata?.category_name ?? "",
+      price: product.variants?.[0]?.prices?.[0]?.amount ?? 0,
+      stock_quantity: product.metadata?.stock_quantity ?? 0,
       description: product.description ?? "",
-      handle: product.handle ?? "",
-      status: product.status ?? "draft",
-      discountable: product.discountable ?? true,
-      options: [
-        {
-          title: "Boyut",
-          values: ["S", "M", "L"],
-          is_exclusive: true,
-        },
-      ],
-      variants: [
-        {
-          title: "Standart",
-          sku: "",
-          options: { Boyut: "S" },
-          prices: [{ amount: 0, currency_code: "TRY" }],
-          manage_inventory: true,
-          allow_backorder: false,
-        },
-      ],
     })
   }, [selectedId, products])
 
-  const updateDraft = <K extends keyof DraftProduct>(key: K, value: DraftProduct[K]) => {
-    setDraft({
-      ...draft,
-      [key]: value,
-    })
+  const updateDraft = <K extends keyof ProductDraft>(key: K, value: ProductDraft[K]) => {
+    setDraft((current) => ({ ...current, [key]: value }))
   }
 
   const createProduct = async () => {
+    setSaving(true)
+    setMessage("")
     const response = await fetch("/admin/products", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(draft),
     })
-
     const data = await response.json()
-
+    setSaving(false)
     if (!response.ok) {
-      alert(data.message || "Ürün oluşturulamadı.")
+      setMessage(data.message || "Ürün oluşturulamadı.")
       return
     }
-
-    alert(data.message || "Ürün oluşturuldu.")
+    setMessage("Ürün oluşturuldu.")
     setDraft(emptyProduct)
     await loadProducts()
   }
 
   const saveUpdate = async () => {
     if (!selectedId) return
-
     setSaving(true)
     const response = await fetch(`/admin/products/${selectedId}`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: draft.title,
-        description: draft.description,
-        handle: draft.handle,
-        status: draft.status,
-        discountable: draft.discountable,
-      }),
+      body: JSON.stringify(draft),
     })
     const data = await response.json()
     setSaving(false)
-
-    if (!response.ok) {
-      alert(data.message || "Ürün güncellenemedi.")
-      return
-    }
-
-    alert("Ürün güncellendi.")
-    await loadProducts()
+    setMessage(response.ok ? "Ürün güncellendi." : data.message || "Ürün güncellenemedi.")
+    if (response.ok) await loadProducts()
   }
 
   if (loading) {
-    return (
-      <Container className="p-6">
-        <Text>Yükleniyor...</Text>
-      </Container>
-    )
+    return <Container className="p-6"><Text>Yükleniyor...</Text></Container>
   }
 
   return (
-    <Container className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <Container className="space-y-6 p-6">
+      <div>
         <Heading level="h1">Ürünler</Heading>
+        <Text className="mt-1 text-ui-fg-subtle">Ürün adı, kategori, fiyat ve stok adedi girerek ürün ekleyin.</Text>
       </div>
+      {message && <div className="rounded-lg border p-4"><Text>{message}</Text></div>}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <div className="space-y-4 rounded-lg border p-4">
+        <section className="space-y-3 rounded-lg border p-4">
           <Heading level="h2">Ürün Listesi</Heading>
-          <div className="space-y-2">
-            {products.map((product) => (
-              <button
-                key={product.id}
-                className={`w-full rounded-md border p-3 text-left ${
-                  selectedId === product.id ? "bg-ui-bg-interactive text-white" : "bg-ui-bg-subtle"
-                }`}
-                onClick={() => setSelectedId(product.id)}
-              >
-                <Text weight="plus">{product.title}</Text>
-                <Text size="small" className={selectedId === product.id ? "text-white/80" : "text-ui-fg-subtle"}>
-                  {product.status ?? "draft"}
-                </Text>
-              </button>
-            ))}
+          {products.map((product) => (
+            <button
+              key={product.id}
+              className={`w-full rounded-md border p-3 text-left ${selectedId === product.id ? "bg-ui-bg-interactive text-white" : "bg-ui-bg-subtle"}`}
+              onClick={() => setSelectedId(product.id)}
+            >
+              <Text weight="plus">{product.title}</Text>
+              <Text size="small">{product.metadata?.category_name || "Kategorisiz"} · {product.metadata?.stock_quantity ?? 0} adet</Text>
+            </button>
+          ))}
+          {!products.length && <Text className="text-ui-fg-subtle">Henüz ürün yok.</Text>}
+        </section>
+
+        <section className="space-y-4 rounded-lg border p-4">
+          <Heading level="h2">{selectedId ? "Ürünü Düzenle" : "Yeni Ürün"}</Heading>
+          <Field label="Ürün adı" value={draft.title} onChange={(value) => updateDraft("title", value)} />
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <Field label="Kategori" value={draft.category} onChange={(value) => updateDraft("category", value)} />
+            <NumberField label="Fiyat (TL)" value={draft.price} onChange={(value) => updateDraft("price", value)} />
+            <NumberField label="Stok adedi" value={draft.stock_quantity} onChange={(value) => updateDraft("stock_quantity", value)} />
           </div>
-        </div>
-
-        <div className="space-y-6">
-          <div className="rounded-lg border p-4 space-y-4">
-            <Heading level="h2">Yeni Ürün</Heading>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Text size="small">Ürün adı</Text>
-                <Input
-                  value={draft.title}
-                  onChange={(event) => updateDraft("title", event.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Text size="small">Handle</Text>
-                <Input
-                  value={draft.handle}
-                  onChange={(event) => updateDraft("handle", event.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Text size="small">Açıklama</Text>
-              <Textarea
-                value={draft.description}
-                onChange={(event) => updateDraft("description", event.target.value)}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Text size="small">Durum</Text>
-                <Select
-                  value={draft.status}
-                  onValueChange={(value) => updateDraft("status", value as DraftProduct["status"])}
-                >
-                  <Select.Trigger>
-                    <Select.Value />
-                  </Select.Trigger>
-                  <Select.Content>
-                    <Select.Item value="draft">Taslak</Select.Item>
-                    <Select.Item value="proposed">Önerildi</Select.Item>
-                    <Select.Item value="published">Yayınlandı</Select.Item>
-                    <Select.Item value="rejected">Reddedildi</Select.Item>
-                  </Select.Content>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Text size="small">İndirimlenebilir</Text>
-                <Input
-                  type="checkbox"
-                  checked={draft.discountable}
-                  onChange={(event) => updateDraft("discountable", event.target.checked)}
-                />
-              </div>
-            </div>
-
-            <Button onClick={createProduct}>Ürünü Oluştur</Button>
-          </div>
-
-          {selectedId && (
-            <div className="rounded-lg border p-4 space-y-4">
-              <Heading level="h2">Ürün Düzenle</Heading>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Text size="small">Ürün adı</Text>
-                  <Input
-                    value={draft.title}
-                    onChange={(event) => updateDraft("title", event.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Text size="small">Handle</Text>
-                  <Input
-                    value={draft.handle}
-                    onChange={(event) => updateDraft("handle", event.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Text size="small">Açıklama</Text>
-                <Textarea
-                  value={draft.description}
-                  onChange={(event) => updateDraft("description", event.target.value)}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Text size="small">Durum</Text>
-                  <Select
-                    value={draft.status}
-                    onValueChange={(value) => updateDraft("status", value as DraftProduct["status"])}
-                  >
-                    <Select.Trigger>
-                      <Select.Value />
-                    </Select.Trigger>
-                    <Select.Content>
-                      <Select.Item value="draft">Taslak</Select.Item>
-                      <Select.Item value="proposed">Önerildi</Select.Item>
-                      <Select.Item value="published">Yayınlandı</Select.Item>
-                      <Select.Item value="rejected">Reddedildi</Select.Item>
-                    </Select.Content>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Text size="small">İndirimlenebilir</Text>
-                  <Input
-                    type="checkbox"
-                    checked={draft.discountable}
-                    onChange={(event) => updateDraft("discountable", event.target.checked)}
-                  />
-                </div>
-              </div>
-
-              <Button onClick={saveUpdate} disabled={saving}>
-                {saving ? "Kaydediliyor..." : "Değişiklikleri Kaydet"}
-              </Button>
-            </div>
-          )}
-        </div>
+          <Field label="Açıklama" value={draft.description} onChange={(value) => updateDraft("description", value)} multiline />
+          <Button onClick={selectedId ? saveUpdate : createProduct} disabled={saving}>
+            {saving ? "Kaydediliyor..." : selectedId ? "Değişiklikleri Kaydet" : "Ürünü Oluştur"}
+          </Button>
+        </section>
       </div>
     </Container>
   )
 }
 
-export const config = defineRouteConfig({
-  label: "Products",
-})
+const Field = ({ label, value, onChange, multiline = false }: { label: string; value: string; onChange: (value: string) => void; multiline?: boolean }) => (
+  <div className="space-y-2">
+    <Text size="small">{label}</Text>
+    {multiline ? <Textarea value={value} onChange={(event) => onChange(event.target.value)} /> : <Input value={value} onChange={(event) => onChange(event.target.value)} />}
+  </div>
+)
+
+const NumberField = ({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) => (
+  <div className="space-y-2">
+    <Text size="small">{label}</Text>
+    <Input type="number" min="0" value={String(value)} onChange={(event) => onChange(Number(event.target.value))} />
+  </div>
+)
+
+export const config = defineRouteConfig({ label: "Products" })
 
 export default ProductPage

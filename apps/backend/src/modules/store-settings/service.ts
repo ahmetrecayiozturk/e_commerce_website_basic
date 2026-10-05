@@ -1,4 +1,4 @@
-import { MedusaError, MedusaService, Modules } from "@medusajs/framework/utils"
+import { MedusaError, MedusaService } from "@medusajs/framework/utils"
 import StoreSetting from "./models/store-setting"
 
 class StoreSettingsModuleService extends MedusaService({
@@ -107,119 +107,12 @@ class StoreSettingsModuleService extends MedusaService({
   }
 
   async validateStoreSettingsPayload(payload: Record<string, any>, req: any) {
-    const regionService = req.scope.resolve(Modules.REGION) as any
-    const salesChannelService = req.scope.resolve(Modules.SALES_CHANNEL) as any
-    const fulfillmentService = req.scope.resolve(Modules.FULFILLMENT) as any
-    const stockLocationService = req.scope.resolve(Modules.STOCK_LOCATION) as any
-    const paymentService = req.scope.resolve(Modules.PAYMENT) as any
-
-    const regionIds = (await regionService.listRegions({}, { select: ["id"] })).map(
-      (region: any) => region.id
-    )
-    const salesChannelIds = (
-      await salesChannelService.listSalesChannels({}, { select: ["id"] })
-    ).map((channel: any) => channel.id)
-    const shippingProfileIds = (
-      await fulfillmentService.listShippingProfiles({}, { select: ["id"] })
-    ).map((profile: any) => profile.id)
-    const shippingOptionIds = (
-      await fulfillmentService.listShippingOptions({}, { select: ["id"] })
-    ).map((option: any) => option.id)
-    const stockLocationIds = (
-      await stockLocationService.listStockLocations({}, { select: ["id"] })
-    ).map((location: any) => location.id)
-    const paymentProviderIds = (
-      await paymentService.listPaymentProviders({}, { select: ["id"] })
-    ).map((provider: any) => provider.id)
-
-    const validations = [
-      {
-        key: "default_region_id",
-        value: payload.default_region_id,
-        validIds: regionIds,
-        label: "Bölge",
-      },
-      {
-        key: "default_sales_channel_id",
-        value: payload.default_sales_channel_id,
-        validIds: salesChannelIds,
-        label: "Satış kanalı",
-      },
-      {
-        key: "default_shipping_profile_id",
-        value: payload.default_shipping_profile_id,
-        validIds: shippingProfileIds,
-        label: "Kargo profili",
-      },
-      {
-        key: "default_shipping_option_id",
-        value: payload.default_shipping_option_id,
-        validIds: shippingOptionIds,
-        label: "Kargo yöntemi",
-      },
-      {
-        key: "default_stock_location_id",
-        value: payload.default_stock_location_id,
-        validIds: stockLocationIds,
-        label: "Depo konumu",
-      },
-      {
-        key: "default_payment_provider_id",
-        value: payload.default_payment_provider_id,
-        validIds: paymentProviderIds,
-        label: "Ödeme sağlayıcısı",
-      },
-    ]
-
-    for (const rule of validations) {
-      if (!rule.value) {
-        continue
-      }
-
-      if (!rule.validIds.includes(rule.value)) {
-        throw new MedusaError(
-          MedusaError.Types.INVALID_DATA,
-          `${rule.label} için seçilen kayıt mevcut değil. Lütfen listeden tekrar seçin.`
-        )
-      }
+    if (payload.country_code && payload.country_code !== "TR") {
+      throw new MedusaError(MedusaError.Types.INVALID_DATA, "Bu mağaza Türkiye satışları için yapılandırılmıştır.")
     }
-
-    if (payload.default_currency_code) {
-      const regionCurrency = (await regionService.listRegions({}, { select: ["id", "currency_code"] }))
-      const hasMatchingCurrency = regionCurrency.some(
-        (region: any) => region.currency_code === payload.default_currency_code
-      )
-
-      if (!hasMatchingCurrency) {
-        throw new MedusaError(
-          MedusaError.Types.INVALID_DATA,
-          "Seçilen para birimi sistemde tanımlı bölge para birimiyle uyuşmuyor."
-        )
-      }
+    if (payload.default_currency_code && payload.default_currency_code !== "TRY") {
+      throw new MedusaError(MedusaError.Types.INVALID_DATA, "Para birimi TRY olarak sabittir.")
     }
-
-    if (
-      payload.default_region_id &&
-      payload.default_shipping_option_id &&
-      payload.default_shipping_profile_id
-    ) {
-      const profiles = await fulfillmentService.listShippingProfiles({}, { select: ["id", "name"] })
-      const options = await fulfillmentService.listShippingOptions({}, { select: ["id", "name", "shipping_profile_id"] })
-      const selectedProfile = profiles.find(
-        (profile: any) => profile.id === payload.default_shipping_profile_id
-      )
-      const selectedOption = options.find(
-        (option: any) => option.id === payload.default_shipping_option_id
-      )
-
-      if (selectedProfile && selectedOption && selectedOption.shipping_profile_id !== selectedProfile.id) {
-        throw new MedusaError(
-          MedusaError.Types.INVALID_DATA,
-          "Seçilen kargo yöntemi ile kargo profili birbirine uygun değil."
-        )
-      }
-    }
-
     return true
   }
 }

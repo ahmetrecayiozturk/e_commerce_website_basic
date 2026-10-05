@@ -28,7 +28,14 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
   }
 
   const payload = (req.body ?? {}) as Record<string, any>
-  const { area: _area, tenant_id: _tenantId, ...update } = payload
+  const {
+    area: _area,
+    tenant_id: _tenantId,
+    category,
+    price: _price,
+    stock_quantity: _stockQuantity,
+    ...update
+  } = payload
   const updatePayload = {
     ...update,
     title: update.title ?? existing.title,
@@ -36,6 +43,11 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
     description: update.description ?? existing.description,
     status: update.status ?? existing.status,
     discountable: update.discountable ?? existing.discountable,
+    metadata: {
+      ...(existing.metadata ?? {}),
+      ...(category !== undefined ? { category_name: category } : {}),
+      ...(_stockQuantity !== undefined ? { stock_quantity: Number(_stockQuantity) } : {}),
+    },
   }
 
   const { result } = await updateProductsWorkflow(req.scope).run({
