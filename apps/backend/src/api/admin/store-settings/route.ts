@@ -26,10 +26,11 @@ const normalizeOptionList = (items: any[] = []) =>
     name: getVisibleName(item),
   }))
 
-const safeList = async (list: () => Promise<any[]>) => {
+const safeList = async (label: string, list: () => Promise<any[]>) => {
   try {
     return await list()
-  } catch {
+  } catch (error) {
+    console.error(`Unable to load ${label} options`, error)
     return []
   }
 }
@@ -47,14 +48,24 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
 
   const [regions, salesChannels, shippingProfiles, shippingOptions, stockLocations, paymentProviders] =
     await Promise.all([
-      safeList(() => regionService.listRegions({}, { select: ["id", "name", "currency_code"] })),
-      safeList(() => salesChannelService.listSalesChannels({}, { select: ["id", "name"] })),
-      safeList(() => fulfillmentService.listShippingProfiles({}, { select: ["id", "name"] })),
-      safeList(() =>
+      safeList("regions", () =>
+        regionService.listRegions({}, { select: ["id", "name", "currency_code"] })
+      ),
+      safeList("sales channels", () =>
+        salesChannelService.listSalesChannels({}, { select: ["id", "name"] })
+      ),
+      safeList("shipping profiles", () =>
+        fulfillmentService.listShippingProfiles({}, { select: ["id", "name"] })
+      ),
+      safeList("shipping options", () =>
         fulfillmentService.listShippingOptions({}, { select: ["id", "name", "shipping_profile_id"] })
       ),
-      safeList(() => stockLocationService.listStockLocations({}, { select: ["id", "name"] })),
-      safeList(() => paymentService.listPaymentProviders({}, { select: ["id", "is_enabled"] })),
+      safeList("stock locations", () =>
+        stockLocationService.listStockLocations({}, { select: ["id", "name"] })
+      ),
+      safeList("payment providers", () =>
+        paymentService.listPaymentProviders({}, { select: ["id", "is_enabled"] })
+      ),
     ])
 
   res.json({
