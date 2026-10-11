@@ -1,5 +1,6 @@
 import { MedusaError, MedusaService } from "@medusajs/framework/utils"
 import StoreSetting from "./models/store-setting"
+import { decryptSecret, encryptSecret } from "./crypto"
 
 class StoreSettingsModuleService extends MedusaService({
   StoreSetting,
@@ -39,6 +40,15 @@ class StoreSettingsModuleService extends MedusaService({
       shipping_fee: 0,
       free_shipping_limit: 0,
       estimated_delivery_days: 3,
+      iyzico_api_key: null,
+      iyzico_secret_key: null,
+      iyzico_base_url: "https://api.iyzipay.com",
+      smtp_host: null,
+      smtp_port: 587,
+      smtp_user: null,
+      smtp_pass: null,
+      smtp_from: null,
+      smtp_secure: false,
       is_active: true,
       audit_log: [],
     } as any)
@@ -51,10 +61,30 @@ class StoreSettingsModuleService extends MedusaService({
       : []
 
     const { id: _existingId, ...existingSettings } = existing
+    const integrationPayload = {
+      iyzico_api_key: payload.iyzico_api_key
+        ? encryptSecret(payload.iyzico_api_key)
+        : existing.iyzico_api_key,
+      iyzico_secret_key: payload.iyzico_secret_key
+        ? encryptSecret(payload.iyzico_secret_key)
+        : existing.iyzico_secret_key,
+      iyzico_base_url: payload.iyzico_base_url ?? existing.iyzico_base_url,
+      smtp_host: payload.smtp_host ?? existing.smtp_host,
+      smtp_port: payload.smtp_port ?? existing.smtp_port,
+      smtp_user: payload.smtp_user
+        ? encryptSecret(payload.smtp_user)
+        : existing.smtp_user,
+      smtp_pass: payload.smtp_pass
+        ? encryptSecret(payload.smtp_pass)
+        : existing.smtp_pass,
+      smtp_from: payload.smtp_from ?? existing.smtp_from,
+      smtp_secure: payload.smtp_secure ?? existing.smtp_secure,
+    }
     const nextSettings = {
       ...existingSettings,
       tenant_id: tenantId,
       ...payload,
+      ...integrationPayload,
       social_links: payload.social_links ?? existing.social_links ?? {},
       audit_log: [
         ...currentAudit,
@@ -104,6 +134,23 @@ class StoreSettingsModuleService extends MedusaService({
       id: existing.id,
       ...nextSettings,
     } as any)
+  }
+
+  async getIntegrationConfig(tenantId = "default") {
+    const settings = await this.getStoreSettingsForTenant(tenantId)
+    return {
+      iyzicoApiKey: decryptSecret(settings.iyzico_api_key) || process.env.IYZICO_API_KEY || "",
+      iyzicoSecretKey:
+        decryptSecret(settings.iyzico_secret_key) || process.env.IYZICO_SECRET_KEY || "",
+      iyzicoBaseUrl:
+        settings.iyzico_base_url || process.env.IYZICO_BASE_URL || "https://api.iyzipay.com",
+      smtpHost: settings.smtp_host || process.env.SMTP_HOST || "",
+      smtpPort: settings.smtp_port || Number(process.env.SMTP_PORT || 587),
+      smtpUser: decryptSecret(settings.smtp_user) || process.env.SMTP_USER || "",
+      smtpPass: decryptSecret(settings.smtp_pass) || process.env.SMTP_PASS || "",
+      smtpFrom: settings.smtp_from || process.env.SMTP_FROM || "",
+      smtpSecure: settings.smtp_secure ?? process.env.SMTP_SECURE === "true",
+    }
   }
 
   async validateStoreSettingsPayload(payload: Record<string, any>, req: any) {

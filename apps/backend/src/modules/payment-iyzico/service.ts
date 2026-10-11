@@ -3,6 +3,7 @@ import {
   MedusaError,
 } from "@medusajs/framework/utils"
 import { IyzicoOptions } from "./types"
+import { STORE_SETTINGS_MODULE } from "../store-settings"
 
 const Iyzipay = require("iyzipay")
 
@@ -28,16 +29,34 @@ class IyzicoPaymentProviderService extends AbstractPaymentProvider<IyzicoOptions
 
   protected client_: any
   protected options_: IyzicoOptions
+  protected settingsService_: any
 
   constructor(container: any, options: IyzicoOptions) {
     super(container, options)
     this.options_ = options
+    this.settingsService_ = container.resolve?.(STORE_SETTINGS_MODULE) ?? container[STORE_SETTINGS_MODULE]
 
     this.client_ = new Iyzipay({
       apiKey: options.api_key,
       secretKey: options.secret_key,
       uri: this.normalizeBaseUrl(options.base_url),
     })
+  }
+
+  private async getClient() {
+    const settings = this.settingsService_
+      ? await this.settingsService_.getIntegrationConfig()
+      : {
+          iyzicoApiKey: this.options_.api_key,
+          iyzicoSecretKey: this.options_.secret_key,
+          iyzicoBaseUrl: this.options_.base_url,
+        }
+    this.client_ = new Iyzipay({
+      apiKey: settings.iyzicoApiKey || this.options_.api_key,
+      secretKey: settings.iyzicoSecretKey || this.options_.secret_key,
+      uri: this.normalizeBaseUrl(settings.iyzicoBaseUrl || this.options_.base_url),
+    })
+    return this.client_
   }
 
   async initiatePayment(input: any): Promise<any> {
@@ -101,13 +120,13 @@ class IyzicoPaymentProviderService extends AbstractPaymentProvider<IyzicoOptions
 
     const callIyzico = (): Promise<any> =>
       new Promise((resolve, reject) => {
-        this.client_.checkoutFormInitialize.create(request, (err: any, result: any) => {
+        void this.getClient().then((client) => client.checkoutFormInitialize.create(request, (err: any, result: any) => {
           if (err) {
             reject(err)
             return
           }
           resolve(result)
-        })
+        }))
       })
 
     let lastError: any = null
@@ -164,8 +183,9 @@ class IyzicoPaymentProviderService extends AbstractPaymentProvider<IyzicoOptions
       }
     }
 
+    const client = await this.getClient()
     return new Promise((resolve) => {
-      this.client_.checkoutForm.retrieve(
+      client.checkoutForm.retrieve(
         { locale: Iyzipay.LOCALE.TR, token },
         (err: any, result: any) => {
           if (err || result.status !== "success" || result.paymentStatus !== "SUCCESS") {
@@ -203,8 +223,9 @@ class IyzicoPaymentProviderService extends AbstractPaymentProvider<IyzicoOptions
   async cancelPayment(input: any): Promise<any> {
     const paymentId = (input.data as any)?.paymentId
 
+    const client = await this.getClient()
     return new Promise((resolve) => {
-      this.client_.cancel.create(
+      client.cancel.create(
         {
           locale: Iyzipay.LOCALE.TR,
           paymentId,

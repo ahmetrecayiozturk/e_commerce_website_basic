@@ -15,9 +15,34 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
   const service: StoreSettingsModuleService = req.scope.resolve(STORE_SETTINGS_MODULE)
   const tenantId = resolveTenantId(req)
   const settings = await service.getStoreSettingsForTenant(tenantId)
+  const integration = await service.getIntegrationConfig(tenantId)
 
   res.json({
-    store_settings: settings,
+    store_settings: {
+      ...settings,
+      iyzico_api_key: undefined,
+      iyzico_secret_key: undefined,
+      smtp_user: undefined,
+      smtp_pass: undefined,
+      integrations: {
+        iyzico: {
+          configured: Boolean(integration.iyzicoApiKey && integration.iyzicoSecretKey),
+          base_url: integration.iyzicoBaseUrl,
+        },
+        smtp: {
+          configured: Boolean(
+            integration.smtpHost &&
+              integration.smtpUser &&
+              integration.smtpPass &&
+              integration.smtpFrom
+          ),
+          host: integration.smtpHost,
+          port: integration.smtpPort,
+          from: integration.smtpFrom,
+          secure: integration.smtpSecure,
+        },
+      },
+    },
     platform_defaults: {
       country_code: "TR",
       currency_code: "TRY",

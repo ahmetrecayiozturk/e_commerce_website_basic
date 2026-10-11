@@ -16,6 +16,19 @@ type StoreSettings = {
   shipping_fee?: number
   free_shipping_limit?: number
   estimated_delivery_days?: number
+  iyzico_api_key?: string
+  iyzico_secret_key?: string
+  iyzico_base_url?: string
+  smtp_host?: string
+  smtp_port?: number
+  smtp_user?: string
+  smtp_pass?: string
+  smtp_from?: string
+  smtp_secure?: boolean
+  integrations?: {
+    iyzico?: { configured?: boolean; base_url?: string }
+    smtp?: { configured?: boolean; host?: string; port?: number; from?: string; secure?: boolean }
+  }
 }
 
 const emptySettings: StoreSettings = {
@@ -32,6 +45,15 @@ const emptySettings: StoreSettings = {
   shipping_fee: 0,
   free_shipping_limit: 0,
   estimated_delivery_days: 3,
+  iyzico_api_key: "",
+  iyzico_secret_key: "",
+  iyzico_base_url: "https://api.iyzipay.com",
+  smtp_host: "",
+  smtp_port: 587,
+  smtp_user: "",
+  smtp_pass: "",
+  smtp_from: "",
+  smtp_secure: false,
 }
 
 const StoreSettingsPage = () => {
@@ -120,6 +142,28 @@ const StoreSettingsPage = () => {
       </section>
 
       <section className="space-y-4 rounded-lg border p-4">
+        <Heading level="h2">Ödeme ve e-posta bağlantıları</Heading>
+        <Text size="small" className="text-ui-fg-subtle">
+          Bu bilgiler şifreli olarak saklanır. Boş bırakırsanız mevcut değer korunur.
+        </Text>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Field label="iyzico API anahtarı" value={settings.iyzico_api_key} onChange={(value) => updateField("iyzico_api_key", value)} secret />
+          <Field label="iyzico gizli anahtarı" value={settings.iyzico_secret_key} onChange={(value) => updateField("iyzico_secret_key", value)} secret />
+          <Field label="iyzico ortam adresi" value={settings.iyzico_base_url} onChange={(value) => updateField("iyzico_base_url", value)} />
+          <Field label="SMTP sunucusu" value={settings.smtp_host} onChange={(value) => updateField("smtp_host", value)} />
+          <NumberField label="SMTP portu" value={settings.smtp_port} onChange={(value) => updateField("smtp_port", value)} />
+          <Field label="SMTP kullanıcı adı" value={settings.smtp_user} onChange={(value) => updateField("smtp_user", value)} secret />
+          <Field label="SMTP şifresi" value={settings.smtp_pass} onChange={(value) => updateField("smtp_pass", value)} secret />
+          <Field label="Gönderen e-posta" value={settings.smtp_from} onChange={(value) => updateField("smtp_from", value)} />
+        </div>
+        <div className="rounded-md bg-ui-bg-subtle p-3">
+          <Text size="small">
+            iyzico: {settings.integrations?.iyzico?.configured ? "Hazır" : "Anahtarlar eksik"} · SMTP: {settings.integrations?.smtp?.configured ? "Hazır" : "Bilgiler eksik"}
+          </Text>
+        </div>
+      </section>
+
+      <section className="space-y-4 rounded-lg border p-4">
         <Heading level="h2">Kargo ve Politikalar</Heading>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <NumberField label="Kargo ücreti (TL)" value={settings.shipping_fee} onChange={(value) => updateField("shipping_fee", value)} />
@@ -145,18 +189,20 @@ const Field = ({
   value,
   onChange,
   multiline = false,
+  secret = false,
 }: {
   label: string
   value?: string
   onChange: (value: string) => void
   multiline?: boolean
+  secret?: boolean
 }) => (
   <div className="space-y-2">
     <Text size="small">{label}</Text>
     {multiline ? (
       <Textarea value={value ?? ""} onChange={(event) => onChange(event.target.value)} />
     ) : (
-      <Input value={value ?? ""} onChange={(event) => onChange(event.target.value)} />
+      <Input type={secret ? "password" : "text"} value={value ?? ""} onChange={(event) => onChange(event.target.value)} />
     )}
   </div>
 )
