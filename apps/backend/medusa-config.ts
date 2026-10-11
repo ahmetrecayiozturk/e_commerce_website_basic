@@ -50,24 +50,27 @@ admin: {
       },
     },
     {
-      resolve: "./src/modules/customer-notification",
-    },
-    // Medusa v2 SendGrid Notification Provider
-    {
       resolve: "@medusajs/medusa/notification",
       options: {
         providers: [
           {
-            resolve: "@medusajs/notification-sendgrid",
-            id: "sendgrid",
+            resolve: "./src/modules/smtp-notification",
+            id: "smtp",
             options: {
               channels: ["email"],
-              api_key: process.env.SENDGRID_API_KEY,
-              from: process.env.SENDGRID_FROM,
+              host: process.env.SMTP_HOST,
+              port: Number(process.env.SMTP_PORT || 587),
+              user: process.env.SMTP_USER,
+              pass: process.env.SMTP_PASS,
+              from: process.env.SMTP_FROM,
+              secure: process.env.SMTP_SECURE === "true",
             },
           },
         ],
       },
+    },
+    {
+      resolve: "./src/modules/customer-notification",
     },
   ],
 })

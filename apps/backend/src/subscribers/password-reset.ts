@@ -1,61 +1,36 @@
 import { SubscriberArgs, SubscriberConfig } from "@medusajs/framework"
+import { Modules } from "@medusajs/framework/utils"
 
-// Tip tanımlamasını "any" yaparak Medusa'nın tüm verilerini özgürce okuyoruz
 export default async function passwordResetHandler({
   event: { data },
+  container,
 }: SubscriberArgs<any>) {
-  
-  // DÜZELTME BURADA: Medusa v2 emailpass modülü, e-posta adresini "entity_id" içinde gönderir!
-  const userEmail = data.entity_id || data.email || data.identifier;
+  const userEmail = data.entity_id || data.email || data.identifier
 
   if (!userEmail) {
-    console.error("[SendGrid] E-posta adresi bulunamadı! Medusa'nın gönderdiği ham veri:", JSON.stringify(data));
-    return;
+    console.error("[SMTP] Şifre sıfırlama e-postası için alıcı bulunamadı.")
+    return
   }
 
-  console.log(`[SendGrid] ${userEmail} adresine şifre sıfırlama linki gönderiliyor...`);
+  const resetLink = `${process.env.STORE_CORS}/reset-password?token=${data.token}&email=${encodeURIComponent(userEmail)}`
+  const notificationService = container.resolve(Modules.NOTIFICATION)
 
-  // E-postadaki butona tıklandığında gidilecek adres
-const resetLink = `${process.env.STORE_CORS}/reset-password?token=${data.token}&email=${userEmail}`;
-
-  // GELİŞTİRİCİ HACK'İ: Mail gitmese bile linki terminalden alıp test edebilmek için
-  console.log("\n=======================================================");
-  console.log("🔑 ŞİFRE SIFIRLAMA LİNKİ (BURADAN KOPYALA):");
-  console.log(resetLink);
-  console.log("=======================================================\n");
   try {
-    const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${process.env.SENDGRID_API_KEY}`,
-        "Content-Type": "application/json"
+    await notificationService.createNotifications({
+      to: userEmail,
+      channel: "email",
+      template: "password-reset",
+      content: {
+        subject: "Şifre sıfırlama",
+        html: `<p>Şifrenizi yenilemek için aşağıdaki bağlantıyı kullanın:</p><p><a href="${resetLink}">${resetLink}</a></p>`,
       },
-      body: JSON.stringify({
-        personalizations: [
-          {
-            to: [{ email: userEmail }],
-            dynamic_template_data: {
-              reset_link: resetLink,
-              order_id: "Şifre Sıfırlama" // Şablonun hata vermemesi için
-            }
-          }
-        ],
-        from: { email: process.env.SENDGRID_FROM_EMAIL || process.env.SENDGRID_FROM },
-        template_id: process.env.SENDGRID_FORGOT_PASSWORD_TPL
-      })
-    });
-
-    if (response.ok) {
-      console.log("✅ [SendGrid] E-posta BAŞARIYLA gönderildi!");
-    } else {
-      const err = await response.text();
-      console.error("❌ [SendGrid] Gönderim hatası:", err);
-    }
-  } catch (err) {
-    console.error("❌ [SendGrid] API'ye bağlanırken hata oluştu:", err);
+    })
+    console.log(`[SMTP] ${userEmail} adresine şifre sıfırlama e-postası gönderildi.`)
+  } catch (error) {
+    console.error("[SMTP] Şifre sıfırlama e-postası gönderilemedi:", error)
   }
 }
 
 export const config: SubscriberConfig = {
-  event: "auth.password_reset", 
+  event: "auth.password_reset",
 }

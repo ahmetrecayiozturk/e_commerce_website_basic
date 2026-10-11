@@ -15,7 +15,6 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
   const service: StoreSettingsModuleService = req.scope.resolve(STORE_SETTINGS_MODULE)
   const tenantId = resolveTenantId(req)
   const settings = await service.getStoreSettingsForTenant(tenantId)
-
   res.json({
     store_settings: settings,
     platform_defaults: {

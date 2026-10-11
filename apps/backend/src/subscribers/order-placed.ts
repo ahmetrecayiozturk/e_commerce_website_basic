@@ -13,13 +13,17 @@ export default async function orderPlacedHandler({
 
   if (!order.email) return
 
-  console.log(`[SendGrid] ${order.email} adresine sipariş onayı gönderiliyor...`)
+  console.log(`[SMTP] ${order.email} adresine sipariş onayı gönderiliyor...`)
 
   // 2. SendGrid motorunu tetikliyoruz
   await notificationService.createNotifications({
     to: order.email,
     channel: "email",
-    template: process.env.SENDGRID_ORDER_PLACED_TPL as string,
+    template: "order-placed",
+    content: {
+      subject: "Siparişiniz alındı",
+      html: `<p>Siparişiniz alındı.</p><p>Sipariş no: ${order.display_id || order.id}</p><p>Toplam: ${order.total ?? 0} TL</p>`,
+    },
     data: {
       // Bu bilgileri SendGrid şablonunda {{ order_id }} olarak kullanabilirsin
       order_id: order.display_id || order.id, 
