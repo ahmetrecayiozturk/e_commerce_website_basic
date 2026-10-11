@@ -4,7 +4,6 @@ import {
   MedusaError,
 } from "@medusajs/framework/utils"
 import nodemailer, { type Transporter } from "nodemailer"
-import { STORE_SETTINGS_MODULE } from "../store-settings"
 
 type InjectedDependencies = {
   logger: Logger
@@ -25,13 +24,10 @@ class SmtpNotificationService extends AbstractNotificationProviderService {
   protected logger_: Logger
   protected transporter_: Transporter
   protected from_: string
-  protected settingsService_: any
 
-  constructor(container: InjectedDependencies & Record<string, any>, options: SmtpOptions) {
+  constructor({ logger }: InjectedDependencies, options: SmtpOptions) {
     super()
-    this.logger_ = container.logger
-    this.settingsService_ =
-      container.resolve?.(STORE_SETTINGS_MODULE) ?? container[STORE_SETTINGS_MODULE]
+    this.logger_ = logger
     this.from_ = options.from
     this.transporter_ = nodemailer.createTransport({
       host: options.host,
@@ -41,18 +37,6 @@ class SmtpNotificationService extends AbstractNotificationProviderService {
         user: options.user,
         pass: options.pass,
       },
-    })
-  }
-
-  private async getTransport() {
-    if (!this.settingsService_) return this.transporter_
-    const settings = await this.settingsService_.getIntegrationConfig()
-    this.from_ = settings.smtpFrom || this.from_
-    return nodemailer.createTransport({
-      host: settings.smtpHost,
-      port: Number(settings.smtpPort),
-      secure: settings.smtpSecure,
-      auth: { user: settings.smtpUser, pass: settings.smtpPass },
     })
   }
 
@@ -70,8 +54,7 @@ class SmtpNotificationService extends AbstractNotificationProviderService {
     const html = notification.content?.html ?? this.renderData(notification.data ?? undefined)
 
     try {
-      const transporter = await this.getTransport()
-      await transporter.sendMail({
+      await this.transporter_.sendMail({
         from: notification.from?.trim() || this.from_,
         to: notification.to,
         subject,
